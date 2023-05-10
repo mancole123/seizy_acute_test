@@ -67,10 +67,13 @@ class ModelPredict:
         for i in tqdm(range(len(filelist)), desc = 'Progress'):
             
             # Get predictions (1D-array)
-            data, bounds_pred = self.get_feature_pred(filelist[i].replace('.h5',''))
+            feature_df = self.get_feature_pred(filelist[i].replace('.h5',''))
             
             # Convert prediction to binary vector and save as .csv
-            ModelPredict.save_idx(os.path.join(self.rawpred_dir, filelist[i].replace('.h5','.csv')), data, bounds_pred)
+            # ModelPredict.save_idx(, data, bounds_pred)
+            file_path = os.path.join(self.rawpred_dir, filelist[i].replace('.h5','.csv'))
+            feature_df.to_csv(file_path, index=False)
+            # np.savetxt(file_path, ver_pred, delimiter=',', fmt='%i')
             
         print('---> Predictions have been generated for: ', self.rawpred_dir + '.','\n')
         print('---------------------------------------------------------------------------\n')
@@ -86,40 +89,46 @@ class ModelPredict:
 
         Returns
         -------
-        data : 3d Numpy Array (1D = segments, 2D = time, 3D = channel)
-        bounds_pred : 2D Numpy Array (rows = seizures, cols = start and end points of detected seizures)
+        # data : 3d Numpy Array (1D = segments, 2D = time, 3D = channel)
+        # bounds_pred : 2D Numpy Array (rows = seizures, cols = start and end points of detected seizures)
+        feature_df: Pandas dataframe
 
         """
         
         # define parameter list
-        param_list = (features.autocorr, features.line_length, features.rms, 
-                      features.mad, features.var, features.std, features.psd, 
-                      features.energy, features.get_envelope_max_diff,)
-        cross_ch_param_list = (features.cross_corr, features.signal_covar,
-                               features.signal_abs_covar,)
+        # param_list = (features.autocorr, features.line_length, features.rms, 
+        #               features.mad, features.var, features.std, features.psd, 
+        #               features.energy, features.get_envelope_max_diff,)
+        # cross_ch_param_list = (features.cross_corr, features.signal_covar,
+        #                        features.signal_abs_covar,)
+        
+        param_list = (features.line_length, features.psd,)
+        cross_ch_param_list = (features.cross_corr,)
         
         # get data and true labels
         data = get_data(self.gen_path, file_id,
                         inner_path={'data_path':self.filt_dir},
                         load_y=False)
         
-        # Eextract features and normalize
+        # extract features and normalize
         x_data, labels = get_features_allch(data, param_list, cross_ch_param_list)
-        x_data = StandardScaler().fit_transform(x_data)
+        # x_data = StandardScaler().fit_transform(x_data)
         
-        # get predictions
-        thresh = (np.mean(x_data) + self.thresh * np.std(x_data))               # get threshold vector
-        y_pred_array = (x_data > thresh)                                        # get predictions for all conditions
-        y_pred = y_pred_array * self.weights * self.enabled                     # get predictions based on weights and selected features
-        y_pred = np.sum(y_pred, axis=1) / np.sum(self.weights * self.enabled)   # normalize to weights and selected features
-        y_pred = y_pred > 0.5                                                   # get popular vote
-        bounds_pred = find_szr_idx(y_pred, dur=1)                               # get predicted seizure index
+        # # get predictions
+        # thresh = (np.mean(x_data) + self.thresh * np.std(x_data))               # get threshold vector
+        # y_pred_array = (x_data > thresh)                                        # get predictions for all conditions
+        # y_pred = y_pred_array * self.weights * self.enabled                     # get predictions based on weights and selected features
+        # y_pred = np.sum(y_pred, axis=1) / np.sum(self.weights * self.enabled)   # normalize to weights and selected features
+        # y_pred = y_pred > 0.5                                                   # get popular vote
+        # bounds_pred = find_szr_idx(y_pred, dur=1)                               # get predicted seizure index
         
-        # if seizures are detected, merge close segments
-        if bounds_pred.shape[0] > 0:
-            bounds_pred = merge_close(bounds_pred, merge_margin=5)
+        # # if seizures are detected, merge close segments
+        # if bounds_pred.shape[0] > 0:
+        #     bounds_pred = merge_close(bounds_pred, merge_margin=5)
+        
+        feature_df = pd.DataFrame(columns=labels, data=x_data)
             
-        return data, bounds_pred 
+        return feature_df 
 
             
     def save_idx(file_path, data, bounds_pred):
